@@ -45,10 +45,16 @@ class ConversionService : Service() {
             if (w == null) stopSelf() else w.cancel()
             return START_NOT_STICKY
         }
-        ServiceCompat.startForeground(
-            this, NOTIF_ID, buildNotification("Preparing…", null, ongoing = true),
-            if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
-        )
+        try {
+            ServiceCompat.startForeground(
+                this, NOTIF_ID, buildNotification("Preparing…", null, ongoing = true),
+                if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
+            )
+        } catch (e: Exception) {
+            ConverterState.failAll("Could not start the conversion service: ${describe(e)}")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (worker?.isActive != true) worker = scope.launch { runQueue() }
         return START_NOT_STICKY
     }
@@ -96,16 +102,19 @@ class ConversionService : Service() {
                     done++
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
+                    // Throwable on purpose: a native-library failure is an Error, not an Exception.
                     failed++
                     ConverterState.update(item.id) {
-                        it.copy(status = Status.FAILED, detail = null, error = e.message ?: "Conversion failed")
+                        it.copy(status = Status.FAILED, detail = null, error = describe(e))
                     }
                 }
             }
         } catch (e: CancellationException) {
             cancelled = true
             ConverterState.cancelPending()
+        } catch (e: Throwable) {
+            ConverterState.failAll(describe(e))
         } finally {
             ConverterState.setRunning(false)
             if (wakeLock.isHeld) wakeLock.release()
@@ -119,6 +128,13 @@ class ConversionService : Service() {
                 .notify(NOTIF_ID + 1, buildNotification("Conversion finished", summary, ongoing = false))
             stopSelf()
         }
+    }
+
+    private fun describe(e: Throwable): String = when (e) {
+        is UnsatisfiedLinkError, is NoClassDefFoundError, is ExceptionInInitializerError ->
+            "FFmpeg could not load on this device. This build supports arm64-v8a; " +
+                "this device reports ${Build.SUPPORTED_ABIS.joinToString()}. ${e.message.orEmpty()}".trim()
+        else -> e.message ?: e::class.java.simpleName
     }
 
     private fun notify(title: String, text: String?, percent: Int?) {
