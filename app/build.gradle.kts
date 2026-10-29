@@ -36,6 +36,10 @@ android {
 dependencies {
     // FFmpeg with LAME (audio package: lame, opus, vorbis, ...). Same API as the retired com.arthenica artifacts.
     implementation("dev.ffmpegkit-maintained:ffmpeg-kit-audio:6.0.3")
+    // FFmpegKit calls into this helper, but the fork's POM does not pull it in. Without it every
+    // conversion fails with NoClassDefFoundError. The two variants use different packages, so both can coexist.
+    implementation("com.arthenica:smart-exception-java:0.2.1")
+    implementation("com.arthenica:smart-exception-java9:0.2.1")
 
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")

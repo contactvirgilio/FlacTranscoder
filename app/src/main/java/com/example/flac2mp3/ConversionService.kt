@@ -131,9 +131,11 @@ class ConversionService : Service() {
     }
 
     private fun describe(e: Throwable): String = when (e) {
-        is UnsatisfiedLinkError, is NoClassDefFoundError, is ExceptionInInitializerError ->
-            "FFmpeg could not load on this device. This build supports arm64-v8a; " +
+        is UnsatisfiedLinkError ->
+            "FFmpeg's native library could not load. This build supports arm64-v8a; " +
                 "this device reports ${Build.SUPPORTED_ABIS.joinToString()}. ${e.message.orEmpty()}".trim()
+        is LinkageError ->
+            "FFmpeg could not start (${e::class.java.simpleName}): ${e.message.orEmpty()}".trim()
         else -> e.message ?: e::class.java.simpleName
     }
 
