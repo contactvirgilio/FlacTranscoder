@@ -76,14 +76,15 @@ fun TagsScreen() {
     }
 
     val pickFiles = rememberLauncherForActivityResult(OpenDocumentsForWrite()) { uris ->
-        uris.forEach {
-            runCatching {
-                ctx.contentResolver.takePersistableUriPermission(
-                    it, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            }.recoverCatching {
-                ctx.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
+        uris.forEach { uri ->
+            val both = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            // Not every provider offers write access; read access alone still allows saving copies.
+            runCatching { ctx.contentResolver.takePersistableUriPermission(uri, both) }
+                .recoverCatching {
+                    ctx.contentResolver.takePersistableUriPermission(
+                        uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
         }
         TagState.addFiles(ctx, uris)
     }
