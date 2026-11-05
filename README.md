@@ -16,6 +16,16 @@ Android app (Jetpack Compose, Material 3 with dynamic color) that converts FLAC 
 - Sources above 48 kHz are resampled for MP3 (88.2/176.4 kHz to 44.1 kHz, others to 48 kHz).
 - Only single-file CUE sheets are supported. A CUE listing several files is rejected with a message.
 
+## Edit tags
+
+The **Tags** tab edits tags without re-encoding the audio (FFmpeg stream copy).
+
+- **Files:** `.flac`, `.mp3`, `.m4a`, `.ogg`, `.opus`, `.wav`.
+- **Per file:** title, artist, album, album artist, year, genre, track and disc.
+- **Apply to all:** anything filled in at the top replaces that tag in every file, for retagging a whole album at once. Title and track stay per file.
+- **Cover art:** choose one image for all files, or remove the embedded cover. (WAV files have no cover.)
+- **Saving:** edited copies go to the output folder and originals are untouched, or switch on *Replace originals* to write over the files. If a write fails the original is put back.
+
 ## Build on GitHub
 
 Every push runs the *Build APK* workflow (unit tests, then `assembleDebug`). Download the `FlacTranscoder-apk` artifact from the run. Push a tag such as `v2.0` to also attach the APK to a GitHub Release.
