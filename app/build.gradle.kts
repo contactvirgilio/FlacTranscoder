@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.flac2mp3"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "2.1"
+        versionCode = 4
+        versionName = "2.2"
 
         // The maintained FFmpegKit fork publishes arm64-v8a prebuilts.
         ndk { abiFilters += listOf("arm64-v8a") }

@@ -18,7 +18,13 @@ enum class OutputFormat(
 ) {
     MP3_320("MP3 320", "MP3, 320 kbps constant bitrate", "mp3", "audio/mpeg"),
     MP3_V0("MP3 V0", "MP3, V0 variable bitrate (about 245 kbps)", "mp3", "audio/mpeg"),
-    FLAC("FLAC", "FLAC, lossless", "flac", "audio/flac"),
+    MP3_V2("MP3 V2", "MP3, V2 variable bitrate (about 190 kbps)", "mp3", "audio/mpeg"),
+
+    // Generic MIME type on purpose: with audio/ogg some Android versions rename the file to ".ogg.oga".
+    VORBIS("Ogg Vorbis", "Ogg Vorbis, quality 8 (about 256 kbps)", "ogg", "application/octet-stream"),
+    FLAC("FLAC", "FLAC, lossless", "flac", "audio/flac");
+
+    val lossy: Boolean get() = this != FLAC
 }
 
 data class Item(

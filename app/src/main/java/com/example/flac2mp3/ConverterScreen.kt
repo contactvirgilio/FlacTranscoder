@@ -9,6 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,6 +30,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
@@ -35,9 +39,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -72,6 +73,10 @@ fun ConverterScreen() {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var cueTarget by remember { mutableStateOf<Long?>(null) }
 
+    // Looking the folder name up asks the storage provider, so do it once per folder.
+    val folderLabel = remember(state.outputDir) {
+        state.outputDir?.let { DocumentFile.fromTreeUri(ctx, it)?.name ?: "Selected folder" }
+    }
     val pending = state.items.count { it.status != Status.DONE }
     val finished = state.items.count { it.status == Status.DONE }
 
@@ -168,9 +173,11 @@ fun ConverterScreen() {
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     if (state.running) {
-                        val current = state.items.count { it.status == Status.DONE } + 1
+                        val settled = state.items.count {
+                            it.status == Status.DONE || it.status == Status.FAILED
+                        }
                         Text(
-                            "Working on file $current of ${state.items.size}",
+                            "$settled of ${state.items.size} files done",
                             style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
@@ -202,7 +209,7 @@ fun ConverterScreen() {
         ) {
             item {
                 SettingsCard(
-                    folderLabel = state.outputDir?.let { DocumentFile.fromTreeUri(ctx, it)?.name ?: "Selected folder" },
+                    folderLabel = folderLabel,
                     format = state.format,
                     split = state.split,
                     enabled = !state.running,
@@ -262,7 +269,7 @@ fun ConverterScreen() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun SettingsCard(
     folderLabel: String?,
@@ -298,21 +305,30 @@ private fun SettingsCard(
             }
 
             Spacer(Modifier.height(8.dp))
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                OutputFormat.entries.forEachIndexed { index, f ->
-                    SegmentedButton(
+            // Chips wrap onto a second row, so every format keeps its full name on narrow screens.
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutputFormat.entries.forEach { f ->
+                    FilterChip(
                         selected = format == f,
                         onClick = { onFormat(f) },
                         enabled = enabled,
-                        shape = SegmentedButtonDefaults.itemShape(index, OutputFormat.entries.size),
-                    ) { Text(f.shortLabel) }
+                        label = { Text(f.shortLabel) },
+                        // The card is already secondaryContainer, the default selected colour.
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                    )
                 }
             }
             Text(
                 format.description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.padding(start = 4.dp, top = 6.dp),
+                modifier = Modifier.padding(start = 4.dp),
             )
 
             Spacer(Modifier.height(8.dp))

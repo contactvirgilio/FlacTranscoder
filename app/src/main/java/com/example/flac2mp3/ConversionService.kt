@@ -20,14 +20,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Runs the queue as a foreground service so long batches survive the screen turning off. */
 class ConversionService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var worker: Job? = null
-    private var lastNotifiedPercent = -1
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -66,10 +67,11 @@ class ConversionService : Service() {
 
         ConverterState.setRunning(true)
         ConverterState.requeueUnfinished()
-        var done = 0
-        var failed = 0
+        val done = AtomicInteger(0)
+        val failed = AtomicInteger(0)
         var cancelled = false
         try {
+            Converter.clearTemp(this)
             // Settings are fixed for the whole run; the UI locks them while running.
             val snapshot = ConverterState.state.value
             val format = snapshot.format
@@ -80,33 +82,72 @@ class ConversionService : Service() {
                 return
             }
             val queue = snapshot.items.filter { it.status != Status.DONE }
-            queue.forEachIndexed { index, item ->
+            val ids = queue.map { it.id }.toSet()
+            val lastNotified = AtomicInteger(-1)
+
+            // One notification for the whole batch, refreshed only when its numbers change.
+            fun notifyOverall() {
+                val items = ConverterState.state.value.items.filter { it.id in ids }
+                val finished = done.get() + failed.get()
+                val running = items.filter { it.status == Status.RUNNING }.sumOf { (it.progress ?: 0f).toDouble() }
+                val pct = (((finished + running) / queue.size) * 100).toInt().coerceIn(0, 100)
+                if (lastNotified.getAndSet(finished * 101 + pct) != finished * 101 + pct) {
+                    notify("$finished of ${queue.size} files done", null, pct)
+                }
+            }
+
+            suspend fun convertOne(item: Item) {
                 ConverterState.update(item.id) {
                     it.copy(status = Status.RUNNING, progress = 0f, detail = null, error = null)
                 }
-                lastNotifiedPercent = -1
-                val title = "File ${index + 1} of ${queue.size}"
-                notify(title, item.name, null)
+                // FFmpeg reports progress many times a second, from several threads.
+                // Only a changed percentage or detail line reaches the UI.
+                val gate = Any()
+                var lastPct = -2
+                var lastDetail: String? = null
                 try {
                     val summary = Converter.convert(this, item, outDir, format, split) { p, detail ->
-                        ConverterState.update(item.id) { it.copy(progress = p, detail = detail) }
-                        val pct = ((p ?: 0f) * 100).toInt()
-                        if (pct != lastNotifiedPercent) {
-                            lastNotifiedPercent = pct
-                            notify(title, detail?.let { "${item.name}, $it" } ?: item.name, if (p == null) null else pct)
+                        val pct = p?.let { (it * 100).toInt() } ?: -1
+                        val changed = synchronized(gate) {
+                            if (pct != lastPct || detail != lastDetail) {
+                                lastPct = pct
+                                lastDetail = detail
+                                true
+                            } else false
+                        }
+                        if (changed) {
+                            ConverterState.update(item.id) {
+                                if (it.status == Status.RUNNING) it.copy(progress = p, detail = detail) else it
+                            }
+                            notifyOverall()
                         }
                     }
                     ConverterState.update(item.id) {
                         it.copy(status = Status.DONE, progress = 1f, detail = summary)
                     }
-                    done++
+                    done.incrementAndGet()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
                     // Throwable on purpose: a native-library failure is an Error, not an Exception.
-                    failed++
+                    failed.incrementAndGet()
                     ConverterState.update(item.id) {
                         it.copy(status = Status.FAILED, detail = null, error = describe(e))
+                    }
+                }
+                notifyOverall()
+            }
+
+            notifyOverall()
+            // A few files at a time. Converter caps the number of encodes actually running.
+            val next = AtomicInteger(0)
+            coroutineScope {
+                repeat(minOf(Converter.parallelism, queue.size)) {
+                    launch {
+                        while (true) {
+                            val item = queue.getOrNull(next.getAndIncrement()) ?: break
+                            convertOne(item)
+                        }
                     }
                 }
             }
@@ -121,8 +162,8 @@ class ConversionService : Service() {
             stopForeground(STOP_FOREGROUND_REMOVE)
             val summary = when {
                 cancelled -> "Cancelled"
-                failed > 0 -> "$done finished, $failed failed"
-                else -> "$done finished"
+                failed.get() > 0 -> "${done.get()} finished, ${failed.get()} failed"
+                else -> "${done.get()} finished"
             }
             getSystemService(NotificationManager::class.java)
                 .notify(NOTIF_ID + 1, buildNotification("Conversion finished", summary, ongoing = false))
