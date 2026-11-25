@@ -12,16 +12,34 @@ android {
         applicationId = "com.example.flac2mp3"
         minSdk = 24
         targetSdk = 35
-        versionCode = 4
+        // Every CI build gets a higher version code, so each one installs as an update.
+        versionCode = 100 + (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
         versionName = "2.2"
 
         // The maintained FFmpegKit fork publishes arm64-v8a prebuilts.
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
+    // One permanent key, so new builds update the installed app instead of needing a reinstall.
+    // CI decodes it from the SIGNING_KEYSTORE / SIGNING_PASSWORD secrets; without them the
+    // build falls back to the throwaway debug key.
+    val keystore = System.getenv("SIGNING_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+    val stable = keystore?.let {
+        signingConfigs.create("stable") {
+            storeFile = it
+            storePassword = System.getenv("SIGNING_PASSWORD")
+            keyAlias = "flactranscoder"
+            keyPassword = System.getenv("SIGNING_PASSWORD")
+        }
+    }
+
     buildTypes {
+        debug {
+            if (stable != null) signingConfig = stable
+        }
         release {
             isMinifyEnabled = false
+            if (stable != null) signingConfig = stable
         }
     }
 

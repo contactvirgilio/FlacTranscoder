@@ -26,7 +26,21 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
+      # The permanent signing key, so new builds install as updates.
+      - name: Load signing key
+        env:
+          SIGNING_KEYSTORE: ${{ secrets.SIGNING_KEYSTORE }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE" ]; then
+            echo "$SIGNING_KEYSTORE" | base64 -d > "$RUNNER_TEMP/signing.p12"
+            echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/signing.p12" >> "$GITHUB_ENV"
+          else
+            echo "::warning::SIGNING_KEYSTORE secret is not set. This APK uses a throwaway key and will not update an installed copy."
+          fi
+
       - name: Unit tests and debug APK
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: gradle testDebugUnitTest assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
