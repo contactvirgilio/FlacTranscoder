@@ -5,11 +5,8 @@
     android:viewportHeight="108">
     <path
         android:pathData="M26,8h56a18,18 0 0,1 18,18v56a18,18 0 0,1 -18,18h-56a18,18 0 0,1 -18,-18v-56a18,18 0 0,1 18,-18z"
-        android:fillColor="#7C4DFF" />
+        android:fillColor="#81409E" />
     <group android:pivotX="54" android:pivotY="54" android:scaleX="1.278" android:scaleY="1.278">
-        <path
-            android:pathData="M32,54a22,22 0 1,0 44,0a22,22 0 1,0 -44,0z"
-            android:fillColor="#000000" />
         <path
             android:pathData="M54.6,40.5 v15.825 c-0.885,-0.51 -1.905,-0.825 -3,-0.825 -3.315,0 -6,2.685 -6,6 s2.685,6 6,6 6,-2.685 6,-6 V46.5 h6 V40.5 h-9z"
             android:fillColor="#FFFFFF" />
